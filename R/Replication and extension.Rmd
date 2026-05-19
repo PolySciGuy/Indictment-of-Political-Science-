@@ -5,6 +5,7 @@ date: "`r Sys.Date()`"
 output: pdf_document 
 ---
 
+
 # Load packages
 Loads haven for reading Stata .dta files and handling labelled variables, dplyr for the filter/group/summarise pipeline, and tidyr, suppresses start up messages so they do not appear in the knitted output.
 
@@ -26,7 +27,12 @@ d <- read_dta("CMPS 2020_replication data.dta")
 # Weighted tabulation function 
 groups by the variable's labelled categories, and returns each category's unweighted count alongside its survey-weighted count and weighted percentage 
 ```{r}
-wtd_tab <- function(data, var, wt = "os_weight") {data %>% filter(!is.na(.data[[var]])) %>% group_by(value = as_factor(.data[[var]])) %>% summarise(n = n(), wtd_n = sum(.data[[wt]], na.rm = TRUE), groups = "drop" ) %>%mutate(wtd_pct = round(100 * wtd_n / sum(wtd_n), 1))}
+wtd_tab <- function(data, var, wt = "os_weight")
+{data %>%
+    filter(!is.na(.data[[var]])) %>% group_by(value = as_factor(.data[[var]])) %>%
+    summarise(n = n(), wtd_n = sum(.data[[wt]], na.rm = TRUE),
+    groups = "drop" ) %>%mutate(wtd_pct = round(100 * wtd_n / sum(wtd_n), 1))}
+    # I am Having issues keeping the code and text on the page in the document
  
 
 ```
@@ -34,8 +40,9 @@ wtd_tab <- function(data, var, wt = "os_weight") {data %>% filter(!is.na(.data[[
 # TABLE 1: Native American ID Across Question Types
 Iterates over the ten identification-related variables and prints a weighted tabulation of each, reproducing the published Table 1 distribution of how respondents are classified as Native under the screener, Census, primary-race, ancestry, and tribal-affiliation items
 ```{r}
-t1_vars <- c("S2_Racer5", "Q803", "S2_Race_Prime", "S2_Nativer2", "S2_Nativer3", "S2_Nativer4", "S2_Nativer5",
-  "Q797r5", "Q798r5", "S11")
+t1_vars <- c("S2_Racer5", "Q803", "S2_Race_Prime", 
+            "S2_Nativer2", "S2_Nativer3", "S2_Nativer4", "S2_Nativer5",
+           "Q797r5", "Q798r5", "S11")
 
 for (v in t1_vars) {
   cat("\n---", v, "---\n")
@@ -50,12 +57,15 @@ for (v in t1_vars) {
  Constructs three subsamples of Native respondents defined by three different identification instruments (screener S2_Racer5 == 1, primary-race S2_Race_Prime == 5, Census Q803 == 3), prints their unweighted sizes (1,070 / 713 / 656), then prints weighted tabulations of ten political and cultural variables within each subsample to reproduce Table 2. 
 
 ```{r}
-subs <- list( "Screener" = d %>% filter(S2_Racer5 == 1), "Primary"  = d %>% filter(S2_Race_Prime == 5), "Census"   = d %>% filter(Q803 == 3))
+subs <- list( "Screener" = d %>% filter(S2_Racer5 == 1), 
+              "Primary"  = d %>% filter(S2_Race_Prime == 5), 
+              "Census"   = d %>% filter(Q803 == 3))
 
 cat("\nSample sizes (unweighted):\n")
 for (nm in names(subs)) {cat("  ", nm, ":", nrow(subs[[nm]]), "\n")}
 
-t2_vars <- c("S2_M", "S6", "Q14", "Q77r1", "Q21", "Q265", "Q57", "Q266", "Q271", "Q819")
+t2_vars <- c("S2_M", "S6", "Q14", "Q77r1", 
+             "Q21", "Q265", "Q57", "Q266", "Q271", "Q819")
 
 for (v in t2_vars) {cat("\n---", v, "---\n")
   for (nm in names(subs)) {cat(" [", nm, "]\n") 
@@ -68,13 +78,7 @@ for (v in t2_vars) {cat("\n---", v, "---\n")
 Cross-tabulates the screener Native flag against the Census Native flag over the full sample 
 
 
-```{r}
-agree <- table(Screener = d$S2_Racer5 == 1, Census   = d$Q803 == 3, useNA = "ifany")
 
-agree
-
- 
-```
 # Mcnear Chi Square Test 
 Confirms neither identification variable has missing values, cross-tabulates the screener Native flag against the Census Native flag, and runs McNemar's test on that 2x2 to test whether the screener-Census disagreement is directionally asymmetric rather than symmetric noise
 
@@ -85,10 +89,11 @@ agree <- table(Screener = d$S2_Racer5 == 1, Census   = d$Q803 == 3, useNA = "ifa
 
 agree
 
-mcnemar.test(agree, correct = FALSE)
+mcnemar.test(agree, correct = FALSE) 
+              # removed redundant code chunk. 
+              # The agree <- table(Screener) I accidentally typed it out twice 
+              # producing two identical 2x2 tables.  
  
 ```
-
-
 
 
