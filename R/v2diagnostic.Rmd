@@ -1,0 +1,102 @@
+---
+title: "Chi=test diagnostic"
+author: "David M. Gregory, M.A."
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+
+
+```{r}
+library(haven)
+  library(dplyr)
+  library(tidyr)
+library(RVAideMemoire)
+
+
+```
+
+```{r}
+d <- read_dta("CMPS 2020_replication data.dta")
+
+```
+
+
+
+```{r}
+
+wtd_tab <- function(data, var, wt = "os_weight")
+   {data %>% filter(!is.na(.data[[var]])) %>% 
+   group_by(value = as_factor(.data[[var]])) %>%
+   summarise(n = n(), wtd_n = sum(.data[[wt]], 
+   na.rm = TRUE), .groups = "drop" ) %>%mutate(wtd_pct = 
+   round(100 * wtd_n / sum(wtd_n), 1))}
+
+
+```
+
+```{r}
+t1_vars <- c("S2_Racer5", "Q803", "S2_Race_Prime", "S2_Nativer2", "S2_Nativer3", "S2_Nativer4", "S2_Nativer5", "Q797r5", "S11")
+
+
+
+```
+
+
+```{r}
+
+subs <- list("Screener" = d%>% 
+filter(S2_Racer5 == 1), "Primary" = d%>%filter(S2_Race_Prime ==5),
+"Census" =d%>% filter(Q803 == 3)) 
+
+```
+
+```{r}
+sapply(subs, nrow)
+```
+```{r}
+t2_vars <- c("S2_M", "S6", "Q14", 
+"Q77r1", "Q21", "Q265", "Q57",
+"Q266", "Q271", "Q819")
+t2_vars <- c("S2_M", "S6", "Q14",
+             "Q77r1", 
+             "Q21", "Q265", 
+             "Q57", "Q266", 
+             "Q271", "Q819")
+
+
+```
+
+
+```{r}
+
+lapply(subs, function(x) table(x$Q803))
+
+```
+
+```{r}
+agree <- table(Screener = d$S2_Racer5 == 1, Census  = d$Q803 == 3, useNA = "ifany")
+
+agree
+```
+
+```{r}
+
+
+
+d_long <- d %>%
+transmute(id      = row_number(), 
+screener = as.integer(S2_Racer5 == 1),
+primary  = as.integer(S2_Race_Prime == 5),
+census = as.integer(Q803 == 3)
+) %>% 
+pivot_longer(-id, names_to = "method", values_to = "identified")
+
+d_long <- d_long %>%
+  mutate(method = factor(method, levels = c("screener", "primary", "census")))
+
+cochran.qtest(identified ~ method | id, data = d_long)
+
+```
+
+
