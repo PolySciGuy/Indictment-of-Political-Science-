@@ -1,0 +1,246 @@
+---
+title: "Chi=test diagnostic and Extension"
+author: "David M. Gregory, M.A."
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+
+
+```{r}
+library(haven)
+  library(dplyr)
+  library(tidyr)
+library(RVAideMemoire)
+library(survey)
+
+```
+
+```{r}
+d <- read_dta("C:/Users/walks/Documents/GitHub/Indictment-of-Political-Science-/R/CMPS 2020_replication data.dta")
+```
+
+
+
+
+```{r}
+
+wtd_tab <- function(data, var, wt = "os_weight")
+   {data %>% filter(!is.na(.data[[var]])) %>% 
+   group_by(value = as_factor(.data[[var]])) %>%
+   summarise(n = n(), wtd_n = sum(.data[[wt]], 
+   na.rm = TRUE), .groups = "drop" ) %>%mutate(wtd_pct = 
+   round(100 * wtd_n / sum(wtd_n), 1))}
+
+
+```
+
+```{r}
+t1_vars <- c("S2_Racer5", "Q803", "S2_Race_Prime", "S2_Nativer2", "S2_Nativer3", "S2_Nativer4", "S2_Nativer5", "Q797r5", "S11")
+
+
+
+```
+
+
+```{r}
+
+subs <- list("Screener" = d%>% 
+filter(S2_Racer5 == 1), "Primary" = d%>%filter(S2_Race_Prime ==5),
+"Census" =d%>% filter(Q803 == 3)) 
+
+```
+
+```{r}
+sapply(subs, nrow)
+```
+```{r}
+t2_vars <- c("S2_M", "S6", "Q14", 
+"Q77r1", "Q21", "Q265", "Q57",
+"Q266", "Q271", "Q819")
+t2_vars <- c("S2_M", "S6", "Q14",
+             "Q77r1", 
+             "Q21", "Q265", 
+             "Q57", "Q266", 
+             "Q271", "Q819")
+
+
+```
+
+
+```{r}
+
+lapply(subs, function(x) table(x$Q803))
+
+```
+
+```{r}
+agree <- table(Screener = d$S2_Racer5 == 1, Census  = d$Q803 == 3, useNA = "ifany")
+
+agree
+```
+
+```{r}
+
+
+
+d_long <- d %>%
+transmute(id      = row_number(), 
+screener = as.integer(S2_Racer5 == 1),
+primary  = as.integer(S2_Race_Prime == 5),
+census = as.integer(Q803 == 3)
+) %>% 
+pivot_longer(-id, names_to = "method", values_to = "identified")
+
+d_long <- d_long %>%
+  mutate(method = factor(method, levels = c("screener", "primary", "census")))
+
+cochran.qtest(identified ~ method | id, data = d_long)
+
+```
+# Survey-weighted membership test 
+# Cluster on respondent id to account for within-subject correlation
+
+```{r}
+
+des_long <- svydesign(ids = ~id, weights = ~os_weight, 
+data = d_long %>% left_join(d %>% transmute(id = row_number(),
+os_weight), by = "id"))
+
+fit <- svyglm(identified ~ method, design = des_long, family = quasibinomial())
+survey::regTermTest(fit, ~method)
+
+
+
+
+
+```
+
+```{r}
+m <- d %>% mutate(f_screen = as.integer(!is.na(S2_Racer5) & S2_Racer5 == 1),
+f_prime  = as.integer(!is.na(S2_Race_Prime) & S2_Race_Prime == 5),
+f_census = as.integer(!is.na(Q803)          & Q803 == 3))
+```
+
+```{r}
+disc <- m %>%
+filter(f_screen != f_census) %>%
+mutate(group = if_else(f_screen == 1, "screener_only", "census_only"))
+
+des <- svydesign(ids = ~1, weights = ~os_weight, data = disc)
+```
+# Q14: presidential vote. Third-party, other, and none are too thin to stand alone.
+## Q77r1: discussed politics. Three "no" variants (unlikely, might, definitely will)
+## all indicate the respondent did not discuss politics in the reference period.
+## Q265: cultural event attendance. Collapse 7-point frequency to 3.
+## Q266: tribal election participation. Category 3 (always, 2.6 in census_only) is thin.
+
+```{r}
+
+disc <- disc %>% mutate(
+Q14c = case_when(Q14 == 1 ~ 1L,   
+ Q14 == 2 ~ 2L,    
+Q14 %in% c(3,4,5,6) ~ 3L,   
+TRUE ~ NA_integer_ ),
+
+Q77r1c = case_when(
+Q77r1 == 1 ~ 1L,   
+Q77r1 == 2 ~ 2L,   
+Q77r1 %in% c(3,4,5) ~ 3L,   
+TRUE~ NA_integer_),
+Q265c = case_when(
+Q265 %in% c(1,2)    ~ 1L,   
+Q265 %in% c(3,4)    ~ 2L,   
+ Q265 %in% c(5,6,7)  ~ 3L, TRUE ~ NA_integer_
+  ),
+Q266c = case_when(
+Q266 == 0  ~ 0L,   
+Q266 == 1  ~ 1L,   
+Q266 %in% c(2,3) ~ 2L, TRUE ~ NA_integer_ ))
+```
+
+# Rebuild the design on the modified data
+```{r}
+des <- svydesign(ids = ~1, weights = ~os_weight, data = disc)
+```
+# Re-run with collapsed variables replacing the originals
+```{r, results = "hide"} 
+t2_collapsed <- c("S2_M", "S6", "Q14c", "Q77r1c", "Q21", "Q265c", "Q57", "Q266c", "Q271", "Q819")
+res <- lapply(t2_collapsed, function(v) {
+out <- svychisq(as.formula(paste0("~", v, " + group")), design = des)
+data.frame(var = v, statistic = unname(out$statistic), p = out$p.value)})
+res <- do.call(rbind, res)
+res$p_bh <- p.adjust(res$p, method = "BH")
+res
+
+
+
+```
+# Q819: collapse "very well" and "somewhat well" into "speaks well."
+# Q265c: collapse to binary. "Monthly or more" is too thin even after the first collapse
+## The substantive distinction is speakers vs non-speakers, not degree of fluency within speakers.
+```{r}
+disc <- disc %>% mutate(
+  
+Q819c = case_when(
+Q819 %in% c(1,2)  ~ 1L,   
+ Q819 == 3 ~ 2L,   
+Q819 == 4 ~ 3L,   
+    TRUE  ~ NA_integer_
+  ),
+  
+Q265b = case_when(
+Q265 %in% c(1,2)      ~ 1L,  
+Q265 %in% c(3,4,5,6,7) ~ 2L, TRUE ~ NA_integer_ ))
+```
+
+```{r}
+
+des <- svydesign(ids = ~1, weights = ~os_weight, data = disc)
+
+t2_final <- c("S2_M", "S6", "Q14c", "Q77r1c", "Q21", "Q265b", "Q57", "Q266c", "Q271", "Q819c")
+
+```
+# Confirm no expected cells below 5
+# Weighted cross-tabs for the final collapsed versions of Q819 and Q265
+
+```{r}
+for (v in c("Q819c", "Q265b")) 
+print(svytable(as.formula(paste0("~", v, " + group")), design = des) %>%
+prop.table(margin = 2) %>% round(3))
+
+```
+
+
+# Final Rao-Scott tests
+
+```{r}
+res_final <- lapply(t2_final, function(v) {
+out <- svychisq(as.formula(paste0("~", v, " + group")), design = des)
+data.frame(var = v, statistic = unname(out$statistic), p = out$p.value)})
+res_final <- do.call(rbind, res_final)
+res_final$p_bh <- p.adjust(res_final$p, method = "BH")
+res_final
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
